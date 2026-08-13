@@ -48,7 +48,7 @@ def run_git(*args: str) -> str:
         text=True,
     )
     if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or "Не удалось определить Git-контекст")
+        raise RuntimeError(result.stderr.strip() or "Could not resolve the Git context")
     return result.stdout.strip()
 
 
@@ -56,7 +56,7 @@ def git_context() -> tuple[Path, str, str]:
     repository_root = Path(run_git("rev-parse", "--show-toplevel")).resolve()
     branch = run_git("branch", "--show-current")
     if not branch:
-        raise RuntimeError("Текущий HEAD находится вне именованной Git-ветки")
+        raise RuntimeError("The current HEAD is not on a named Git branch")
     return repository_root, repository_root.name, branch
 
 
@@ -84,7 +84,7 @@ def validate_text(values: list[str]) -> None:
     joined = "\n".join(values)
     for pattern in SECRET_PATTERNS:
         if pattern.search(joined):
-            raise RuntimeError("Запись отклонена: обнаружены данные, похожие на секрет")
+            raise RuntimeError("Entry rejected: detected data that resembles a secret")
 
 
 def atomic_write(path: Path, content: str) -> None:
@@ -112,22 +112,22 @@ def header(repository_root: Path, repository: str, branch: str, task: str) -> st
     now = timestamp()
     return (
         f"# {branch}\n\n"
-        f"- Репозиторий: `{repository}`\n"
-        f"- Путь: `{repository_root}`\n"
-        f"- Ветка: `{branch}`\n"
-        f"- Создано: `{now}`\n"
-        f"- Обновлено: `{now}`\n"
-        f"- Статус: `в работе`\n\n"
-        "## Контекст\n\n"
+        f"- Repository: `{repository}`\n"
+        f"- Path: `{repository_root}`\n"
+        f"- Branch: `{branch}`\n"
+        f"- Created: `{now}`\n"
+        f"- Updated: `{now}`\n"
+        f"- Status: `in progress`\n\n"
+        "## Context\n\n"
         f"{task.strip()}\n\n"
-        "## События"
+        "## Events"
     )
 
 
 def update_timestamp(content: str) -> str:
     return re.sub(
-        r"(?m)^- Обновлено: `[^`]+`$",
-        f"- Обновлено: `{timestamp()}`",
+        r"(?m)^- Updated: `[^`]+`$",
+        f"- Updated: `{timestamp()}`",
         content,
         count=1,
     )
@@ -135,8 +135,8 @@ def update_timestamp(content: str) -> str:
 
 def update_status(content: str, status: str) -> str:
     return re.sub(
-        r"(?m)^- Статус: `[^`]+`$",
-        f"- Статус: `{status}`",
+        r"(?m)^- Status: `[^`]+`$",
+        f"- Status: `{status}`",
         content,
         count=1,
     )
@@ -145,21 +145,21 @@ def update_status(content: str, status: str) -> str:
 def event_entry(args: argparse.Namespace) -> str:
     parts = [
         f"### {timestamp()} — {args.title.strip()}",
-        f"- Тип: `{args.type}`",
-        f"- Автор: `{args.actor}`",
+        f"- Type: `{args.type}`",
+        f"- Actor: `{args.actor}`",
     ]
     if args.body:
         parts.extend(("", args.body))
     if args.file:
-        parts.extend(("", "Файлы:"))
+        parts.extend(("", "Files:"))
         parts.extend(f"- `{item}`" for item in args.file)
     if args.symbol:
-        parts.extend(("", "Символы:"))
+        parts.extend(("", "Symbols:"))
         parts.extend(f"- `{item}`" for item in args.symbol)
     if args.command:
-        parts.extend(("", f"Команда: `{args.command}`"))
+        parts.extend(("", f"Command: `{args.command}`"))
     if args.result:
-        parts.extend(("", f"Результат: {args.result.strip()}"))
+        parts.extend(("", f"Result: {args.result.strip()}"))
     return "\n".join(parts)
 
 
@@ -180,12 +180,12 @@ def command_init(task: str) -> int:
     lock_file = with_lock(path)
     try:
         if path.exists():
-            print(f"Стенограмма уже существует: {path}")
+            print(f"Transcript already exists: {path}")
             return 0
         atomic_write(path, header(repository_root, repository, branch, task))
     finally:
         lock_file.close()
-    print(f"Создана стенограмма: {path}")
+    print(f"Created transcript: {path}")
     return 0
 
 
@@ -207,18 +207,18 @@ def command_append(args: argparse.Namespace) -> int:
         "agent-comment",
         "agent-response",
     } and args.body is None:
-        raise RuntimeError(f"Для события {args.type} обязателен дословный текст --body")
+        raise RuntimeError(f"Event {args.type} requires verbatim text in --body")
     if args.type == "code-change" and not args.file:
         raise RuntimeError(
-            "Для события code-change обязателен полный путь --file"
+            "Event code-change requires a complete --file path"
         )
     if args.file and not args.symbol:
         raise RuntimeError(
-            "При указании --file обязателен --symbol: полное имя класса/функции "
-            "или 'не применимо: <тип файла>' для файлов без класса"
+            "Using --file requires --symbol: a fully qualified class/function name "
+            "or 'not applicable: <file type>' for files without a code symbol"
         )
     if not path.exists():
-        raise RuntimeError("Стенограмма не существует. Сначала выполните команду init")
+        raise RuntimeError("The transcript does not exist. Run init first")
     lock_file = with_lock(path)
     try:
         content = path.read_text(encoding="utf-8").rstrip("\n")
@@ -226,23 +226,23 @@ def command_append(args: argparse.Namespace) -> int:
         atomic_write(path, f"{content}\n\n{event_entry(args)}")
     finally:
         lock_file.close()
-    print(f"Добавлено событие: {path}")
+    print(f"Added event: {path}")
     return 0
 
 
 def command_resume() -> int:
     path, _, _, _ = transcript_path()
     if not path.exists():
-        raise RuntimeError("Стенограмма не существует. Сначала выполните команду init")
+        raise RuntimeError("The transcript does not exist. Run init first")
     lock_file = with_lock(path)
     try:
         content = path.read_text(encoding="utf-8").rstrip("\n")
-        content = update_status(content, "в работе")
+        content = update_status(content, "in progress")
         content = update_timestamp(content)
         atomic_write(path, content)
     finally:
         lock_file.close()
-    print("Работа по стенограмме возобновлена: в работе")
+    print("Transcript work resumed: in progress")
     return 0
 
 
@@ -250,9 +250,9 @@ def command_finish(status: str) -> int:
     path, _, _, _ = transcript_path()
     status = status.strip()
     if not status:
-        raise RuntimeError("Статус завершения не может быть пустым")
+        raise RuntimeError("Completion status cannot be empty")
     if not path.exists():
-        raise RuntimeError("Стенограмма не существует. Сначала выполните команду init")
+        raise RuntimeError("The transcript does not exist. Run init first")
     lock_file = with_lock(path)
     try:
         content = path.read_text(encoding="utf-8").rstrip("\n")
@@ -261,28 +261,28 @@ def command_finish(status: str) -> int:
         atomic_write(path, content)
     finally:
         lock_file.close()
-    print(f"Статус обновлён: {status}")
+    print(f"Updated status: {status}")
     return 0
 
 
 def parser() -> argparse.ArgumentParser:
-    root = argparse.ArgumentParser(description="Стенографист работы AI-агента по Git-ветке")
+    root = argparse.ArgumentParser(description="Transcribe AI-agent work for each Git branch")
     commands = root.add_subparsers(dest="action", required=True)
 
-    commands.add_parser("show", help="Показать стенограмму текущей ветки")
+    commands.add_parser("show", help="Show the current branch transcript")
 
-    init = commands.add_parser("init", help="Создать стенограмму текущей ветки")
-    init.add_argument("--task", required=True, help="Исходное описание задачи")
+    init = commands.add_parser("init", help="Create the current branch transcript")
+    init.add_argument("--task", required=True, help="Original task description")
 
-    append = commands.add_parser("append", help="Добавить событие")
+    append = commands.add_parser("append", help="Append an event")
     append.add_argument("--type", required=True, choices=EVENT_TYPES)
     append.add_argument("--title", required=True)
     append.add_argument(
         "--actor",
         default=os.environ.get("STENOGRAPHER_ACTOR", "agent"),
         help=(
-            "user для событий пользователя, модель агента (например "
-            "'Claude Opus 4.8') для действий AI, system для системных событий"
+            "user for user events, the model name (for example "
+            "'Claude Opus 4.8') for AI actions, and system for system events"
         ),
     )
     append.add_argument("--body")
@@ -291,10 +291,10 @@ def parser() -> argparse.ArgumentParser:
     append.add_argument("--command")
     append.add_argument("--result")
 
-    commands.add_parser("resume", help="Возобновить работу по существующей стенограмме")
+    commands.add_parser("resume", help="Resume work on an existing transcript")
 
-    finish = commands.add_parser("finish", help="Отметить завершение работы по ветке")
-    finish.add_argument("--status", default="готово", help="Итоговый статус стенограммы")
+    finish = commands.add_parser("finish", help="Mark branch work as complete")
+    finish.add_argument("--status", default="complete", help="Final transcript status")
     return root
 
 
@@ -311,9 +311,9 @@ def main() -> int:
             return command_resume()
         if args.action == "finish":
             return command_finish(args.status)
-        raise RuntimeError(f"Неизвестная команда: {args.action}")
+        raise RuntimeError(f"Unknown command: {args.action}")
     except RuntimeError as error:
-        print(f"Ошибка: {error}", file=sys.stderr)
+        print(f"Error: {error}", file=sys.stderr)
         return 1
 
 

@@ -1,120 +1,107 @@
 ---
 name: stenographer
-description: "Работает как обязательный стенографист задачи по текущей Git-ветке: в реальном времени и без итогового пересказа дословно записывает все сообщения пользователя, видимые ответы и комментарии AI, а также хронологию действий, инструментов, результатов, изменений и внешних операций. Использовать в начале и непрерывно на протяжении каждой задачи внутри Git-репозитория."
+description: "Maintains a complete real-time transcript for work on the current Git branch, recording user messages, visible AI responses, actions, tool calls, results, decisions, changes, and external operations. Use at the start of and continuously throughout every task performed inside a Git repository."
 ---
 
-# Стенографист задачи
+# Task Stenographer
 
-## Назначение
+## Purpose
 
-Вести полную хронологическую стенограмму работы по текущей Git-ветке. Стенограмма является протоколом событий в реальном времени, а не итоговым отчётом или `summary`.
+Maintain a complete chronological transcript of work performed on the current Git branch. Treat the transcript as a real-time event log, not an end-of-task summary.
 
-Использовать скрипт `~/.codex/skills/stenographer/scripts/stenographer.py`. Запускать его **из рабочего репозитория**, а не из каталога скила: скрипт определяет ветку через `git rev-parse`/`git branch` от текущего каталога, поэтому запуск из чужого каталога даст неверный Git-контекст. Во всех командах использовать полный вызов:
+Use `~/.codex/skills/stenographer/scripts/stenographer.py`. Run it from the working repository, not from the skill directory: the script resolves the branch with `git rev-parse` and `git branch`, so running it elsewhere produces the wrong Git context.
 
 ```bash
-python3 ~/.codex/skills/stenographer/scripts/stenographer.py <команда>
+python3 ~/.codex/skills/stenographer/scripts/stenographer.py <command>
 ```
 
-Не полагаться на shell alias: отдельные вызовы инструмента могут выполняться в независимых или неинтерактивных сессиях, которые не читают пользовательский профиль оболочки.
+Do not rely on shell aliases because tool calls may run in isolated or non-interactive shells.
 
-Стенограммы хранить вне репозитория:
+Store transcripts outside the repository:
 
 ```text
-~/.config/ai-rules/stenographer/<репозиторий>/<ветка>.md
+~/.config/ai-rules/stenographer/<repository>/<branch>.md
 ```
 
-В имени файла сохранять имя ветки. Символ `/` заменять на `__`, чтобы ветка не создавала вложенные каталоги. Корень хранения можно переопределить переменной окружения `STENOGRAPHER_ROOT` (по умолчанию `~/.config/ai-rules/stenographer`); задавать её только при явной необходимости, в обычной работе не использовать.
+Preserve the branch name in the filename. Replace `/` with `__` to avoid nested directories. Override the storage root with `STENOGRAPHER_ROOT` only when necessary.
 
-## Обязательный старт задачи
+## Required task startup
 
-Выполнять до исследования, планирования, изменения кода и внешних действий:
+Complete these steps before research, planning, code changes, or external actions:
 
-1. Прочитать этот файл полностью.
-2. Выполнить `python3 ~/.codex/skills/stenographer/scripts/stenographer.py show` из рабочего репозитория.
-3. Если стенограмма существует, прочитать её полностью, использовать как контекст прошлой работы и выполнить `python3 ~/.codex/skills/stenographer/scripts/stenographer.py resume`, чтобы вернуть статус `в работе`.
-4. Если стенограммы нет, выполнить `python3 ~/.codex/skills/stenographer/scripts/stenographer.py init --task "<исходный запрос пользователя>"`.
-5. Записать текущее сообщение пользователя событием `user-request` для новой стенограммы или `user-addition` при продолжении существующей стенограммы с `--actor user`.
-6. Только после этого переходить к остальной работе.
+1. Read this file completely.
+2. Run `python3 ~/.codex/skills/stenographer/scripts/stenographer.py show` from the working repository.
+3. If a transcript exists, read it completely and run `python3 ~/.codex/skills/stenographer/scripts/stenographer.py resume`.
+4. If no transcript exists, run `python3 ~/.codex/skills/stenographer/scripts/stenographer.py init --task "<original user request>"`.
+5. Record the current user message as `user-request` for a new transcript or `user-addition` for an existing transcript, with `--actor user`.
+6. Only then continue with the task.
 
-Чтение этого `SKILL.md`, первоначальный вызов `show`, при необходимости `init`, и их результаты являются bootstrap-действиями. Их не записывать задним числом: до определения или создания стенограммы надёжная запись невозможна. Все последующие события фиксировать в обычном порядке в реальном времени.
+Reading this `SKILL.md`, the initial `show`, and any required `init` are bootstrap operations. Do not reconstruct them afterward because reliable recording was not available before the transcript was resolved or created.
 
-При создании стенограммы исходный запрос намеренно сохраняется дважды: в разделе `Контекст` через `init --task` и отдельным хронологическим событием `user-request`.
+For a new transcript, intentionally preserve the original request twice: once in the Context section created by `init`, and once as a chronological `user-request` event.
 
-Если Git-ветка не определена, остановить стенографирование, сообщить пользователю и не создавать файл с вымышленным именем.
+If the Git branch cannot be resolved, stop transcription, inform the user, and do not invent a transcript path.
 
-## Что считать событием
+## Events to record
 
-Записывать каждое событие отдельно сразу после его возникновения, не откладывая до конца задачи и не объединяя несколько событий задним числом:
+Record each event separately and immediately:
 
-- каждое сообщение, ответ и комментарий пользователя, относящиеся к задаче, включая короткие подтверждения и отказы;
-- каждое решение, подтверждение, запрет, уточнение и дополнение пользователя;
-- каждый видимый пользователю промежуточный комментарий AI;
-- каждый финальный ответ AI;
-- каждое действие AI, включая чтение файлов, поиск, редактирование и обращение к внешней системе;
-- каждый вызов инструмента или команды с назначением, точной командой либо названием операции;
-- каждый результат инструмента или команды: полный безопасный вывод, статус, ошибка или отсутствие результата;
-- созданный или изменённый план;
-- результат исследования, который влияет на решение;
-- принятое решение, допущение или выбранный вариант реализации;
-- каждое создание, изменение, переименование или удаление файла с полным путём от корня репозитория;
-- каждый затронутый класс, объект, интерфейс, функция верхнего уровня или ресурс с полным именем;
-- выполненную значимую команду или проверку и её результат;
-- ошибку, блокер, неудачную попытку и способ восстановления;
-- создание ветки, коммита, push, MR и изменение их состояния;
-- комментарий или ответ, отправленный в Jira, GitLab или другую внешнюю систему;
-- финальный ответ AI как отдельную дословную запись `agent-response`.
+- every task-related user message, clarification, decision, approval, and rejection;
+- every visible AI comment and final response;
+- every AI action, including research, file reads that affect decisions, edits, and external operations;
+- every relevant tool call or command, including its purpose and safe parameters;
+- every tool or command result, including success, failure, or no result;
+- every plan and material plan change;
+- every research finding, decision, assumption, error, blocker, and recovery step;
+- every created, changed, renamed, or deleted file;
+- every affected class, object, interface, top-level function, method, or resource;
+- every verification, commit, push, pull request, and external-system update.
 
-Не записывать отдельным событием технический polling без нового результата и сами операции записи стенограммы, чтобы не создавать рекурсию.
+Record an event before the next action. Do not replace chronological events with a summary or reconstruct them from memory.
 
-`tool-call`/`tool-result` записывать для операций, влияющих на задачу: сборка, поиск, правка, обращение к внешней системе. Не дробить на отдельные события каждое рутинное чтение файла: если чтение ни на что не повлияло — не записывать; если повлияло — записать результат сразу как `research`/`decision`, а не как факт «прочитал файл».
+Do not create events for polling that returns no new information or for transcript-writing operations themselves.
 
-Записывать сообщение до следующего действия, вызов инструмента — перед выполнением, результат — сразу после выполнения. Нельзя заменять последовательность событий итоговой сводкой, пересказом или реконструкцией по памяти.
+Record `tool-call` and `tool-result` for operations that affect the task, such as builds, searches, edits, and external-system calls. Do not create separate events for routine file reads. When a read affects a decision, record its finding directly as `research` or `decision`.
 
-## Что НЕ записывать
+## Events not to record
 
-Эти действия — процессная рутина, они не влияют на протокол работы и раздувают стенограмму. Не создавать под них события:
+Do not create events for process-only operations that add no useful task history:
 
-- чтение самого `SKILL.md`, первичный `show`, `init` и прочие bootstrap-действия старта (уже оговорено в «Обязательный старт задачи»);
-- чтение правил, конвенций, `AGENTS.md` и служебных skill-файлов — ни как `tool-call`, ни как `tool-result`. Если конвенция повлияла на решение, отразить это одной строкой внутри `decision`/`research` (например, «по viewmodel.md — правка остаётся в UI-состоянии»), а не отдельной парой событий;
-- рутинное чтение файлов кода само по себе. Чтение фиксировать только когда его результат влияет на решение — и сразу как `research` или `decision`, а не как факт «прочитал файл»;
-- процессные `agent-comment`-анонсы намерения («сейчас закоммичу», «читаю правила коммита», «готовлю push»). Реальное действие уже даёт событие `commit`/`push`/`code-change`/`external-action`. В `agent-comment` фиксировать только содержательное: анализ, вывод, ответ или вопрос пользователю.
+- reading this skill, the initial `show`, `init`, and other bootstrap operations;
+- reading project rules, conventions, `AGENTS.md`, or supporting skill instructions;
+- routine source-file reads that do not affect a decision;
+- announcements of an intended action when the action itself will produce a `commit`, `push`, `code-change`, or `external-action` event.
 
-## Фиксация полного плана
+If a rule or convention affects a decision, capture the effect in a single `decision` or `research` event instead of logging the rule read itself.
 
-- Промежуточные наброски, изменения todo и частичные этапы плана записывать отдельными событиями `plan` в объёме, соответствующем видимому событию.
-- Когда итоговый план полностью сформирован и готов к публикации пользователю, немедленно записать отдельное событие `plan` с полным дословным содержимым плана.
-- Ссылка на файл плана, путь к нему, краткая сводка, перечень chunk-ов или сообщение о создании файла не заменяют публикацию полного плана в стенограмме.
-- Если полный план хранится во внешнем или временном файле, перед финальным ответом прочитать этот файл полностью и поместить всё его содержимое в `--body` события `plan`.
-- Первую публикацию итогового плана записывать полностью. При последующем изменении **не** дублировать весь план: записывать отдельное событие `plan` только с дельтой — какие пункты добавлены (`+`), удалены (`-`) или переформулированы (`~`), с кратким «почему». Существующую запись не изменять. Полностью план переиздавать только если он переписан структурно и дельта нечитаема.
+## Recording plans
 
-## Правила содержания
+- Record visible draft plans and plan changes as separate `plan` events.
+- Before publishing a completed plan to the user, record its full exact content as a `plan` event.
+- A file path, link, summary, or chunk list does not replace the full plan.
+- When revising an already recorded plan, record only a readable delta with additions (`+`), removals (`-`), changes (`~`), and the reason. Re-record the full plan only after a structural rewrite.
 
-- Писать по-русски.
-- Все сообщения, ответы и комментарии пользователя записывать дословно и полностью независимо от длины.
-- Все видимые пользователю комментарии и ответы AI записывать дословно и полностью независимо от длины.
-- Дословный текст сообщения, ответа или комментария помещать в `--body`; `--title` использовать только как короткий заголовок события, не как замену тексту.
-- Указывать `--actor`: `user` для событий пользователя (`user-request`, `user-addition`, `user-decision`), `system` для системных событий, а для действий, комментариев и ответов AI — имя агента по конвенции `workflow-ai-signature`: фактическую модель без префикса `AI`, например `Claude Opus 4.8` или `Codex GPT-5`. Каждый агент подставляет своё имя; не оставлять обобщённое `agent`. Значение можно задать один раз через переменную окружения `STENOGRAPHER_ACTOR` (тогда оно станет дефолтом `--actor`), но при работе нескольких агентов по одной ветке имя всё равно указывать явно в каждом событии.
-- Для вызова инструмента записывать название инструмента, полную операцию или команду, параметры без секретов и цель вызова.
-- Для результата инструмента записывать полный безопасный результат. Секреты и конфиденциальные данные маскировать маркером `[REDACTED]` **до** вызова `append`, сохраняя само событие. Скрипт при обнаружении секрета полностью отклоняет запись, а не редактирует её, поэтому ответственность за маскирование — на агенте; встроенная проверка ловит лишь ограниченный набор паттернов и не заменяет ручную редакцию.
-- Для очень длинного вывода допускается усечение: сохранять ключевую часть (начало и/или фрагмент, влияющий на решение) и статус, а опущенное заменять маркером `[обрезано N строк]`. Усекать содержательно, не теряя сути; полностью пустой результат недопустим.
-- Не записывать скрытые рассуждения модели. Записывать только выводы, решения и наблюдаемые действия.
-- Не записывать секреты, токены, пароли, cookies, персональные данные и необработанные конфиденциальные ответы инструментов.
-- Для каждого изменения указывать полный путь файла от корня репозитория, не только имя файла.
-- Для Kotlin/Java-кода указывать полное квалифицированное имя класса, объекта или интерфейса, например `com.example.app.uikit.MainButtonContainerDefaults`.
-- Для метода указывать полное имя владельца и метода, например `com.example.app.FeatureViewModel#loadData`.
-- Для top-level функции указывать полное имя пакета и функции.
-- Для XML, Gradle, ресурсов и других файлов без класса указывать в `--symbol` полное имя ресурса или `не применимо: <тип файла>`.
-- Событие `code-change` без `--file` считать неполным и не записывать.
-- Для события `code-change` в `--body` вместе с кратким описанием обязательно включать unified diff изменения (`git diff -U3 -- <файл>` или аналог), а не весь файл. Diff должен содержать hunk-заголовки вида `@@ -a,b +c,d @@` с номерами строк и контекст ±3 строки вокруг изменения. Для нового файла достаточно его полного содержимого, поскольку оно и есть diff.
-- Любое событие с указанным `--file` обязано иметь `--symbol`; скрипт отклоняет запись без него независимо от `--type`, чтобы правка файла не проходила мимо требования полного имени класса/функции/ресурса через другой тип события.
-- Для команд указывать команду и итог: успешно, ошибка или заблокировано.
-- Для ошибок указывать причину и следующий безопасный шаг.
-- Не переписывать существующую историю и не удалять события.
-- Не создавать пустую строку в конце файла.
+## Content rules
 
-## Типы событий
+- Preserve every user message and visible AI response verbatim and in full, regardless of length or language.
+- Put verbatim messages in `--body`; use `--title` only as a short event label.
+- Use `user` for user events, `system` for system events, and the actual model name for AI events, such as `Claude Opus 4.8` or `Codex GPT-5`. Never leave the generic actor `agent` for AI events.
+- Include the full safe command or operation for tool calls and the complete safe result for tool results.
+- Redact secrets and confidential data with `[REDACTED]` before calling `append`. The script rejects detected secrets instead of modifying them.
+- For very long output, preserve the relevant beginning or decision-making excerpt and replace omitted material with `[truncated N lines]`.
+- Never record hidden model reasoning, secrets, tokens, passwords, cookies, personal data, or raw confidential responses.
+- For each changed file, use the full repository-relative path.
+- For Kotlin or Java, include the fully qualified class, object, interface, method, or top-level function name.
+- For XML, Gradle, resources, and files without a code symbol, use `not applicable: <file type>` as the symbol.
+- A `code-change` event must include at least one `--file`.
+- Every event with `--file` must also include `--symbol`.
+- In each `code-change` body, include a concise description followed by the unified diff with hunk headers and three lines of context. For a new file, its complete content is acceptable as the diff.
+- Record each command outcome as successful, failed, or blocked.
+- For failures, record the cause and next safe step.
+- Never rewrite or delete existing transcript history.
+- Do not leave a trailing blank line at the end of a file.
 
-Использовать один из типов:
+## Event types
 
 - `user-request`
 - `user-addition`
@@ -135,40 +122,40 @@ python3 ~/.codex/skills/stenographer/scripts/stenographer.py <команда>
 - `push`
 - `external-action`
 
-## Команды
+## Commands
 
-Показать стенограмму текущей ветки:
+Show the current branch transcript:
 
 ```bash
 python3 ~/.codex/skills/stenographer/scripts/stenographer.py show
 ```
 
-Создать стенограмму:
+Create a transcript:
 
 ```bash
-python3 ~/.codex/skills/stenographer/scripts/stenographer.py init --task "Краткое описание задачи"
+python3 ~/.codex/skills/stenographer/scripts/stenographer.py init --task "Task description"
 ```
 
-Записать сообщение пользователя (дословный текст — в `--body`):
+Record a user message:
 
 ```bash
 python3 ~/.codex/skills/stenographer/scripts/stenographer.py append \
   --type user-request \
   --actor user \
-  --title "Запрос: правка градиента контейнера" \
-  --body "<дословный текст сообщения пользователя без сокращений>"
+  --title "Request: adjust container gradient" \
+  --body "<complete verbatim user message>"
 ```
 
-Добавить событие изменения кода (`--body` содержит краткое описание и unified diff с номерами строк):
+Record a code change:
 
 ```bash
 python3 ~/.codex/skills/stenographer/scripts/stenographer.py append \
   --type code-change \
-  --actor "Claude Opus 4.8" \
-  --title "Исправлен градиент контейнера" \
-  --body "Заменена прозрачная точка градиента с сохранением RGB фонового цвета.
+  --actor "Codex GPT-5" \
+  --title "Fixed container gradient" \
+  --body "Preserved the background RGB values at the transparent gradient stop.
 
-@@ -12,7 +12,7 @@ fun DmMainButtonContainer(...) {
+@@ -12,7 +12,7 @@ fun MainButtonContainer(...) {
      val gradient = Brush.verticalGradient(
          colors = listOf(
 -            Color.Transparent,
@@ -180,35 +167,35 @@ python3 ~/.codex/skills/stenographer/scripts/stenographer.py append \
   --symbol "com.example.app.uikit.MainButtonContainer"
 ```
 
-Для команды или проверки:
+Record a verification:
 
 ```bash
 python3 ~/.codex/skills/stenographer/scripts/stenographer.py append \
   --type verification \
-  --actor "Claude Opus 4.8" \
-  --title "Проверена компиляция UIKit" \
-  --command "./gradlew :core:uikit:compileRuDebugKotlin" \
-  --result "Успешно"
+  --actor "Codex GPT-5" \
+  --title "Verified UIKit compilation" \
+  --command "./gradlew :core:uikit:compileDebugKotlin" \
+  --result "Successful"
 ```
 
-Возобновить работу по существующей стенограмме после её полного прочтения:
+Resume work:
 
 ```bash
 python3 ~/.codex/skills/stenographer/scripts/stenographer.py resume
 ```
 
-Отметить завершение работы по ветке (по умолчанию статус `готово`):
+Finish work:
 
 ```bash
-python3 ~/.codex/skills/stenographer/scripts/stenographer.py finish --status "готово"
+python3 ~/.codex/skills/stenographer/scripts/stenographer.py finish --status "complete"
 ```
 
-## Завершение ответа
+## Completing a response
 
-Перед финальным ответом:
+Before the final response:
 
-1. Убедиться, что все события текущего хода записаны.
-2. Если формировался итоговый план, убедиться, что его полное содержимое опубликовано в стенограмме отдельным событием `plan`.
-3. Добавить дословный финальный ответ событием `agent-response`; не создавать заменяющий стенограмму `summary`.
-4. Не считать стенограмму заменой ответа пользователю: финальный ответ должен оставаться самодостаточным.
-5. Когда работа по ветке завершена (смёржено/закрыто), выполнить `python3 ~/.codex/skills/stenographer/scripts/stenographer.py finish`, чтобы перевести статус из `в работе` в `готово`.
+1. Confirm that every event from the current turn has been recorded.
+2. If a final plan was produced, confirm that its complete content was recorded as a `plan` event.
+3. Record the exact final response as an `agent-response` event.
+4. Keep the final response self-contained; the transcript does not replace the user-facing response.
+5. When branch work is complete, run `python3 ~/.codex/skills/stenographer/scripts/stenographer.py finish` to update the transcript status.

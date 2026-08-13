@@ -1,4 +1,4 @@
 interface:
-  display_name: "Стенографист задачи"
-  short_description: "Полная стенограмма работы по Git-ветке"
+  display_name: "Task Stenographer"
+  short_description: "Complete transcript for each Git branch"
   default_prompt: "Use $stenographer to transcribe in real time every user message, visible AI response, action, tool call, result, and change in the current Git branch task."
