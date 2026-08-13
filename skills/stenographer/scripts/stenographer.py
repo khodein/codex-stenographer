@@ -281,8 +281,8 @@ def parser() -> argparse.ArgumentParser:
         "--actor",
         default=os.environ.get("STENOGRAPHER_ACTOR", "agent"),
         help=(
-            "user for user events, the model name (for example "
-            "'Claude Opus 4.8') for AI actions, and system for system events"
+            "user for user events, the actual model name for AI actions, "
+            "and system for system events"
         ),
     )
     append.add_argument("--body")

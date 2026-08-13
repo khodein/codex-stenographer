@@ -85,7 +85,7 @@ If a rule or convention affects a decision, capture the effect in a single `deci
 
 - Preserve every user message and visible AI response verbatim and in full, regardless of length or language.
 - Put verbatim messages in `--body`; use `--title` only as a short event label.
-- Use `user` for user events, `system` for system events, and the actual model name for AI events, such as `Claude Opus 4.8` or `Codex GPT-5`. Never leave the generic actor `agent` for AI events.
+- Use `user` for user events, `system` for system events, and the actual model name for AI events. Never leave the generic actor `agent` for AI events.
 - Include the full safe command or operation for tool calls and the complete safe result for tool results.
 - Redact secrets and confidential data with `[REDACTED]` before calling `append`. The script rejects detected secrets instead of modifying them.
 - For very long output, preserve the relevant beginning or decision-making excerpt and replace omitted material with `[truncated N lines]`.
@@ -142,7 +142,7 @@ Record a user message:
 python3 ~/.codex/skills/stenographer/scripts/stenographer.py append \
   --type user-request \
   --actor user \
-  --title "Request: adjust container gradient" \
+  --title "Example" \
   --body "<complete verbatim user message>"
 ```
 
@@ -151,20 +151,17 @@ Record a code change:
 ```bash
 python3 ~/.codex/skills/stenographer/scripts/stenographer.py append \
   --type code-change \
-  --actor "Codex GPT-5" \
-  --title "Fixed container gradient" \
-  --body "Preserved the background RGB values at the transparent gradient stop.
+  --actor "Example Agent" \
+  --title "Example" \
+  --body "Example change.
 
-@@ -12,7 +12,7 @@ fun MainButtonContainer(...) {
-     val gradient = Brush.verticalGradient(
-         colors = listOf(
--            Color.Transparent,
-+            backgroundColor.copy(alpha = 0f),
-             backgroundColor,
-         ),
-     )" \
-  --file "core/uikit/src/main/java/com/example/app/uikit/MainButtonContainer.kt" \
-  --symbol "com.example.app.uikit.MainButtonContainer"
+@@ -1,3 +1,3 @@
+ Example
+-Old value
++New value
+ Example" \
+  --file "example/path/Example.ext" \
+  --symbol "Example"
 ```
 
 Record a verification:
@@ -172,10 +169,10 @@ Record a verification:
 ```bash
 python3 ~/.codex/skills/stenographer/scripts/stenographer.py append \
   --type verification \
-  --actor "Codex GPT-5" \
-  --title "Verified UIKit compilation" \
-  --command "./gradlew :core:uikit:compileDebugKotlin" \
-  --result "Successful"
+  --actor "Example Agent" \
+  --title "Example" \
+  --command "example-command" \
+  --result "Example result"
 ```
 
 Resume work:
